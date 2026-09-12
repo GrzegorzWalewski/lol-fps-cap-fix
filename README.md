@@ -5,6 +5,63 @@ A small AutoHotkey script that fixes a Windows bug where League of Legends
 framerate after alt-tabbing to a window on a **different physical monitor**,
 in a multi-monitor setup.
 
+## Requirements
+
+- [AutoHotkey v2.0](https://www.autohotkey.com/)
+- Windows 10/11 with a multi-monitor setup exhibiting the same symptom
+- League of Legends (or adjust `League of Legends.exe` in the script to
+  match another game's process name — check with AutoHotkey's bundled
+  **Window Spy** tool if unsure)
+
+## Usage
+
+1. Install AutoHotkey v2.
+2. Save `fix-fps.ahk` (script below) anywhere convenient.
+3. Double-click it to run — no tray icon interaction needed; it runs
+   silently in the background.
+4. Optionally, add a shortcut to it in your Startup folder
+   (`Win+R` → `shell:startup`) so it's always active.
+
+```autohotkey
+#Requires AutoHotkey v2.0
+#SingleInstance Force
+Persistent
+
+global lastWasLoL := false
+
+cbPtr := CallbackCreate(WinEventProc, "F", 7)
+hHook := DllCall("SetWinEventHook"
+    , "UInt", 0x3, "UInt", 0x3
+    , "Ptr", 0
+    , "Ptr", cbPtr
+    , "UInt", 0, "UInt", 0
+    , "UInt", 0
+    , "Ptr")
+
+WinEventProc(hWinEventHook, event, hwnd, idObject, idChild, idEventThread, dwmsEventTime) {
+    global lastWasLoL
+    if (!hwnd)
+        return
+    exe := ""
+    try exe := WinGetProcessName("ahk_id " hwnd)
+    isLoL := (exe = "League of Legends.exe")
+    if (isLoL && !lastWasLoL) {
+        SetTimer(() => FixWindow(hwnd), -10)
+    }
+    lastWasLoL := isLoL
+}
+
+FixWindow(hwnd) {
+    if !WinExist("ahk_id " hwnd)
+        return
+    WinMinimize("ahk_id " hwnd)
+    Sleep(50)
+    WinActivate("ahk_id " hwnd)
+}
+
+OnExit((*) => DllCall("UnhookWinEvent", "Ptr", hHook))
+```
+
 ## The problem
 
 **Setup:** 3 monitors, AMD Radeon RX 6900 XT, League of Legends running in
@@ -102,63 +159,6 @@ avoids that category entirely — it only calls standard Win32
 window-management APIs from outside the game process (the same class of
 API used by ordinary window-snapping utilities), never touching the game's
 memory or render pipeline.
-
-## Requirements
-
-- [AutoHotkey v2.0](https://www.autohotkey.com/)
-- Windows 10/11 with a multi-monitor setup exhibiting the same symptom
-- League of Legends (or adjust `League of Legends.exe` in the script to
-  match another game's process name — check with AutoHotkey's bundled
-  **Window Spy** tool if unsure)
-
-## Usage
-
-1. Install AutoHotkey v2.
-2. Save `fix-fps.ahk` (script below) anywhere convenient.
-3. Double-click it to run — no tray icon interaction needed; it runs
-   silently in the background.
-4. Optionally, add a shortcut to it in your Startup folder
-   (`Win+R` → `shell:startup`) so it's always active.
-
-```autohotkey
-#Requires AutoHotkey v2.0
-#SingleInstance Force
-Persistent
-
-global lastWasLoL := false
-
-cbPtr := CallbackCreate(WinEventProc, "F", 7)
-hHook := DllCall("SetWinEventHook"
-    , "UInt", 0x3, "UInt", 0x3
-    , "Ptr", 0
-    , "Ptr", cbPtr
-    , "UInt", 0, "UInt", 0
-    , "UInt", 0
-    , "Ptr")
-
-WinEventProc(hWinEventHook, event, hwnd, idObject, idChild, idEventThread, dwmsEventTime) {
-    global lastWasLoL
-    if (!hwnd)
-        return
-    exe := ""
-    try exe := WinGetProcessName("ahk_id " hwnd)
-    isLoL := (exe = "League of Legends.exe")
-    if (isLoL && !lastWasLoL) {
-        SetTimer(() => FixWindow(hwnd), -10)
-    }
-    lastWasLoL := isLoL
-}
-
-FixWindow(hwnd) {
-    if !WinExist("ahk_id " hwnd)
-        return
-    WinMinimize("ahk_id " hwnd)
-    Sleep(50)
-    WinActivate("ahk_id " hwnd)
-}
-
-OnExit((*) => DllCall("UnhookWinEvent", "Ptr", hHook))
-```
 
 ## Diagnostic tools used
 
