@@ -1,8 +1,10 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 #SingleInstance Force
 Persistent
 
 global lastWasLoL := false
+global seenPids := Map()
+global startupGraceMs := 15000  ; ignore the first 15s after the game window appears
 
 cbPtr := CallbackCreate(WinEventProc, "F", 7)
 hHook := DllCall("SetWinEventHook"
@@ -14,14 +16,23 @@ hHook := DllCall("SetWinEventHook"
     , "Ptr")
 
 WinEventProc(hWinEventHook, event, hwnd, idObject, idChild, idEventThread, dwmsEventTime) {
-    global lastWasLoL
+    global lastWasLoL, seenPids, startupGraceMs
     if (!hwnd)
         return
     exe := ""
     try exe := WinGetProcessName("ahk_id " hwnd)
     isLoL := (exe = "League of Legends.exe")
-    if (isLoL && !lastWasLoL) {
-        SetTimer(() => FixWindow(hwnd), -10)
+    if (isLoL) {
+        pid := 0
+        try pid := WinGetPID("ahk_id " hwnd)
+        if (pid) {
+            if (!seenPids.Has(pid))
+                seenPids[pid] := A_TickCount
+            elapsed := A_TickCount - seenPids[pid]
+            if (!lastWasLoL && elapsed > startupGraceMs) {
+                SetTimer(() => FixWindow(hwnd), -10)
+            }
+        }
     }
     lastWasLoL := isLoL
 }
